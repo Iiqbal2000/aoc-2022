@@ -1,6 +1,6 @@
 use std::io::{self, Read};
 
-use aoc_2022_day2::play;
+use day2::play;
 fn main() -> io::Result<()> {
   let mut buffer = String::new();
   let mut stdin = io::stdin();
