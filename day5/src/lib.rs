@@ -10,9 +10,9 @@ use nom::{
   multi::many0,
   branch::alt, Parser, combinator::{value, map}, error::{ParseError, Error},
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write};
 
-pub fn exec(buf: String) -> &'static str {
+pub fn exec(buf: String) -> String {
   let buf = buf.split("\n\n").collect::<Vec<&str>>();
 
   let header = buf[0].split('\n').collect::<Vec<&str>>();
@@ -28,7 +28,15 @@ pub fn exec(buf: String) -> &'static str {
     store.move_crates(line);
   }
 
-  ""
+  let mut result = String::new();
+  for k in 1..=store.0.len() {
+    let crates = store.0.get(&k).expect("fail to get crates");
+    let crate_val = crates[crates.len()-1]; 
+    
+    result.write_str(crate_val);
+  }
+
+  result
 }
 
 #[derive(Debug)]
@@ -51,7 +59,7 @@ impl<'a> Store<'a> {
       let k = i+1;
       
       if !val.is_empty() {
-        self.0.entry(k).or_insert(Vec::new()).push(val);
+        self.0.entry(k).or_insert(Vec::new()).insert(0, val);
       }      
     }
   }
@@ -81,21 +89,18 @@ impl<'a> Store<'a> {
       .parse::<usize>()
       .expect("fail to convert dst value");
 
-    let elems = self.0.get(&converted_src)
-      .expect("fail to get a map value");
-
-    let elems = &mut elems[0..converted_len].to_vec();
-
-    self.0.entry(converted_dst)
-      .or_insert(Vec::new())
-      .append(elems);
-    
-
-    let x = self.0.get_mut(&converted_src)
-      .expect("fail to get a map value");
+    let store = &mut self.0;
 
     for _i in 1..=converted_len {
-      x.pop();
+      let src_elems = store
+        .get_mut(&converted_src)
+        .expect("fail to get a map value")
+        .pop()
+        .expect("fail to pop src's vector");
+
+      store.entry(converted_dst)
+      .or_insert(Vec::new())
+      .push(src_elems);
     }
 
   }
@@ -194,7 +199,7 @@ move 3 from 1 to 3
 move 2 from 2 to 1
 move 1 from 1 to 2";
 
-    assert_eq!("", exec(String::from(payload)));
+    assert_eq!("CMZ", exec(String::from(payload)));
   }
 
   #[test]
