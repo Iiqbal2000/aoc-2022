@@ -1,36 +1,36 @@
 use nom::{
   IResult,
-  sequence::{delimited, terminated, preceded, tuple},
-  // see the "streaming/complete" paragraph lower for an explanation of these submodules
-  character::complete::{char, alpha0, multispace0, digit0, space0},
-  character::is_alphabetic,
+  sequence::{delimited, preceded, tuple},
+  character::complete::{char, alpha0, digit0, space0},
   bytes::complete::tag,
-  bytes::complete::is_not,
   multi::separated_list0,
-  multi::many0,
-  branch::alt, Parser, combinator::{value, map}, error::{ParseError, Error},
+  branch::alt, combinator::{value}, error::{Error},
 };
 use std::{collections::HashMap, fmt::Write};
 
 pub fn exec(buf: String) -> String {
   let buf = buf.split("\n\n").collect::<Vec<&str>>();
 
-  let header = buf[0].split('\n').collect::<Vec<&str>>();
-  let mut store: Store = Store::from_elems(parse_elements(header.first().unwrap()).unwrap().1);
+  let crate_stack_raw = buf[0].split('\n').collect::<Vec<&str>>();
+
+  let mut crates_store: Store = Store::new();
 
   // feed the store
-  for value_line in header[0..header.len()-1].iter().copied() {
+  for value_line in crate_stack_raw.iter().copied() {
     let elems = parse_elements(value_line).unwrap().1;
-    store.insert_from_vec(elems);
+    crates_store.insert_from_vec(elems);
   }
 
-  for line in buf[1].lines() {
-    store.move_crates(line);
+  let cmd_iter = buf[1].lines();
+  for line in cmd_iter {
+    crates_store.move_crate(line);
   }
 
   let mut result = String::new();
-  for k in 1..=store.0.len() {
-    let crates = store.0.get(&k).expect("fail to get crates");
+  
+  let number_of_crates = crates_store.0.len();
+  for k in 1..=number_of_crates {
+    let crates = crates_store.0.get(&k).expect("fail to get crates");
     let crate_val = crates[crates.len()-1]; 
     
     result.write_str(crate_val);
@@ -43,15 +43,9 @@ pub fn exec(buf: String) -> String {
 pub struct Store<'a>(HashMap<usize, Vec<&'a str>>);
 
 impl<'a> Store<'a> {
-  fn from_elems(elems: Vec<&'a str>) -> Store<'a> {
-    let mut items: Vec<(usize, Vec<&'a str>)> = vec![];
-    
-    for k in 1..=elems.len() {
-      items.push((k.to_owned(), vec![]))
-    }
-
-    let store = HashMap::from_iter(items.into_iter());
-    Store(store)
+  fn new() -> Store<'a> {
+    let kv: HashMap<usize, Vec<&str>> = HashMap::new();
+    Store(kv)
   }
 
   fn insert_from_vec(&mut self, elems: Vec<&'a str>) {
@@ -68,7 +62,7 @@ impl<'a> Store<'a> {
   // len: 1
   // src: 2
   // dst: 1
-  fn move_crates(&mut self, cmd: &str) {
+  fn move_crate(&mut self, cmd: &str) {
     let (_, (len, src, dst)) = tuple(
       (
         parse_crate_len, 
@@ -126,23 +120,6 @@ fn parse_elements(input: &str) -> IResult<&str, Vec<&str>> {
   parser(input)
 }
 
-fn parse_keys(input: &str) -> IResult<&str, Vec<&str>> {
-  many0(
-    alt((
-        delimited(
-            tag(" "),
-            digit0,
-            tag("  ")
-        ),
-        delimited(
-            tag(" "),
-            digit0,
-            tag(" ")
-        ),
-    ))
-    )(input)
-}
-
 fn parse_crate_len(input: &str) -> IResult<&str, &str, Error<&str>> {
   preceded(
     tag("move"),
@@ -178,13 +155,6 @@ mod tests {
   
     let (_, result) = parse_elements("    [D]    ").unwrap();
     assert_eq!(vec!["", "D", ""], result);
-  }
-
-  #[test]
-  fn should_parse_keys() {
-    let (_, result) = parse_keys(" 1   2   3 ").unwrap();
-
-    assert_eq!(vec!["1", "2", "3"], result);
   }
 
   #[test]
