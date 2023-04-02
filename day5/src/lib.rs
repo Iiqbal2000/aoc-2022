@@ -16,7 +16,7 @@ pub fn exec(buf: String) -> String {
   let mut crates_store: Store = Store::new();
 
   // feed the store
-  for value_line in crate_stack_raw.iter().copied() {
+  for value_line in crate_stack_raw.into_iter() {
     let elems = parse_elements(value_line).unwrap().1;
     crates_store.insert_from_vec(elems);
   }
