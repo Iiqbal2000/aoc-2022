@@ -91,7 +91,7 @@ impl<'a> Store<'a> {
 
     let mut moved_crates = src_elems.split_off(src_elems.len() - converted_len);
     
-    moved_crates.reverse();
+    // moved_crates.reverse();
 
     store.entry(converted_dst)
       .or_insert(Vec::new())
@@ -169,7 +169,9 @@ move 3 from 1 to 3
 move 2 from 2 to 1
 move 1 from 1 to 2";
 
-    assert_eq!("CMZ", exec(String::from(payload)));
+    // assert_eq!("CMZ", exec(String::from(payload)));
+    assert_eq!("MCD", exec(String::from(payload)));
+
   }
 
   #[test]
