@@ -85,17 +85,17 @@ impl<'a> Store<'a> {
 
     let store = &mut self.0;
 
-    for _i in 1..=converted_len {
-      let src_elems = store
-        .get_mut(&converted_src)
-        .expect("fail to get a map value")
-        .pop()
-        .expect("fail to pop src's vector");
+    let src_elems = store
+      .get_mut(&converted_src)
+      .expect("fail to get a map value");
 
-      store.entry(converted_dst)
+    let mut moved_crates = src_elems.split_off(src_elems.len() - converted_len);
+    
+    moved_crates.reverse();
+
+    store.entry(converted_dst)
       .or_insert(Vec::new())
-      .push(src_elems);
-    }
+      .append(&mut moved_crates);
 
   }
 }
