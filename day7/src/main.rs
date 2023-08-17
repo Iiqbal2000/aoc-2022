@@ -1,6 +1,7 @@
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, Read};
 use std::rc::{self, Rc, Weak};
 
@@ -22,7 +23,6 @@ struct Node<'a> {
 struct FileSystem<'a> {
     root_dir: Option<Rc<Node<'a>>>,
     current_dir: Option<Rc<Node<'a>>>,
-    history: HashMap<String, Rc<Node<'a>>>,
 }
 
 impl<'a> FileSystem<'a> {
@@ -36,8 +36,8 @@ impl<'a> FileSystem<'a> {
                 (Some("$"), Some("ls")) => {
                     let mut children: Vec<&str> = vec![];
 
-                    while let Some(listItem) = line.peek() {
-                        let first_word = listItem.split_whitespace().next().unwrap();
+                    while let Some(list_item) = line.peek() {
+                        let first_word = list_item.split_whitespace().next().unwrap();
 
                         if first_word.chars().all(char::is_numeric) || first_word == "dir" {
                             children.push(line.next().unwrap())
@@ -53,46 +53,33 @@ impl<'a> FileSystem<'a> {
         }
     }
 
-    fn cd(&mut self, param1: &'a str) {
-        if param1 != ".." {
-            // if let Some(existing_node) = self.history.get(param1) {
-            //     self.current_dir = Some(existing_node.clone());
-            //     // self.history.clear();
-            // } else {
-            //     let n = Node::new(param1, NodeType::dir(0));
-            //
-            //     if self.root_dir.is_none() {
-            //         self.root_dir = Some(n.clone());
-            //     } else {
-            //         Node::add_child(self.root_dir.as_ref().unwrap(), n.clone());
-            //     }
-            //
-            //     self.current_dir = Some(n.clone());
-            // }
-            let n = Node::new(param1, NodeType::dir(0));
+    fn cd(&mut self, arg: &'a str) {
+        if arg != ".." {
+            let n = Node::new(arg, NodeType::dir(0));
 
             if self.root_dir.is_none() {
                 self.root_dir = Some(n.clone());
                 self.current_dir = Some(n.clone());
             } else {
-                let mut is_current_dir = false;
+                let mut is_target_dir_exist = false;
                 let mut current_dir = self.current_dir.as_ref().borrow_mut().unwrap();
 
-                let mut child_become_current_dir: Option<Rc<Node<'_>>> = None;
+                let mut target_dir: Option<Rc<Node<'_>>> = None;
 
+                // looking for the target dir on children of the current dir
                 for c in current_dir.children.borrow().iter() {
-                    if c.name == param1 {
-                        is_current_dir = true;
-                        // *self.current_dir.borrow_mut() = Some(c.clone());
-                        child_become_current_dir = Some(c.clone());
+                    if c.name == arg {
+                        is_target_dir_exist = true;
+                        target_dir = Some(c.clone());
+                        break;
                     }
                 }
 
-                if !is_current_dir {
+                if !is_target_dir_exist {
                     Node::add_child(self.root_dir.as_ref().unwrap(), n.clone());
                     self.current_dir = Some(n.clone());
                 } else {
-                    self.current_dir = child_become_current_dir;
+                    self.current_dir = target_dir;
                 }
             }
         } else {
@@ -112,8 +99,8 @@ impl<'a> FileSystem<'a> {
         }
     }
 
-    fn ls(&mut self, listItem: Vec<&'a str>) {
-        for item in listItem {
+    fn ls(&mut self, list_item: Vec<&'a str>) {
+        for item in list_item {
             let mut splitted_item = item.split_whitespace().peekable();
 
             if splitted_item.peek() == Some(&"dir") {
@@ -122,9 +109,6 @@ impl<'a> FileSystem<'a> {
                 let new_node = Node::new(node_name, NodeType::dir(0));
 
                 Node::add_child(current_dir, new_node.clone());
-
-                self.history
-                    .insert(String::from(node_name), new_node.clone());
             } else {
                 let current_dir = self.current_dir.as_ref().unwrap();
                 let node_size: u32 = splitted_item.next().unwrap().parse().unwrap();
@@ -133,11 +117,8 @@ impl<'a> FileSystem<'a> {
                 let new_node = Node::new(node_name, NodeType::file(node_size));
 
                 Node::add_child(current_dir, new_node.clone());
-                self.history
-                    .insert(String::from(node_name), new_node.clone());
             }
         }
-        // dbg!(&(self.current_dir.as_ref().unwrap()));
     }
 }
 
@@ -332,7 +313,6 @@ dir d";
         let mut fs = FileSystem {
             root_dir: None,
             current_dir: None,
-            history: HashMap::new(),
         };
 
         fs.parse_cmds(line);
@@ -350,7 +330,6 @@ dir a
         let mut fs = FileSystem {
             root_dir: None,
             current_dir: None,
-            history: HashMap::new(),
         };
 
         fs.parse_cmds(line);
@@ -369,7 +348,6 @@ $ cd ..";
         let mut fs = FileSystem {
             root_dir: None,
             current_dir: None,
-            history: HashMap::new(),
         };
 
         fs.parse_cmds(line);
@@ -380,7 +358,7 @@ $ cd ..";
     }
 
     #[test]
-    fn find_directories_at_most_100000_size() {
+    fn part1() {
         let mut line = "$ cd /
 $ ls
 dir a
@@ -408,7 +386,6 @@ $ ls
         let mut fs = FileSystem {
             root_dir: None,
             current_dir: None,
-            history: HashMap::new(),
         };
 
         fs.parse_cmds(line);
@@ -432,31 +409,74 @@ $ ls
         assert_eq!(95437, total_size);
         assert_eq!(2, result.len());
     }
+
+    #[test]
+    fn part2() {
+        let mut line = "$ cd /
+$ ls
+dir a
+14848514 b.txt
+8504156 c.dat
+dir d
+$ cd a
+$ ls
+dir e
+29116 f
+2557 g
+62596 h.lst
+$ cd e
+$ ls
+584 i
+$ cd ..
+$ cd ..
+$ cd d
+$ ls
+4060174 j
+8033020 d.log
+5626152 d.ext
+7214296 k";
+
+        let mut fs = FileSystem {
+            root_dir: None,
+            current_dir: None,
+        };
+
+        fs.parse_cmds(line);
+
+        const total_space: u32 = 70000000;
+        const unused_space_needed: u32 = 30000000;
+
+        let current_empty_space: u32 = total_space - (&fs).root_dir.clone().unwrap().total_size();
+
+        let is_the_dir = |node: &Node| -> bool {
+            match *node.nodeType.borrow() {
+                NodeType::dir(size) => (size + current_empty_space) >= unused_space_needed,
+                NodeType::file(_) => false,
+            }
+        };
+
+        let result = fs.root_dir.unwrap().filter_nodes(&is_the_dir);
+
+        let unwrap_size = |node: &Node| match *node.nodeType.borrow() {
+            NodeType::dir(size) | NodeType::file(size) => size,
+        };
+
+        let smallest_node = result.iter().min_by(|a, b| {
+            return unwrap_size(&a).cmp(&unwrap_size(&b));
+        });
+
+        assert_eq!(24933642, unwrap_size(smallest_node.unwrap()));
+    }
 }
 
-fn main() {
-    let mut buf = String::new();
-    let mut stdin = io::stdin();
-    stdin.read_to_string(&mut buf);
-
-    let mut fs = FileSystem {
-        root_dir: None,
-        current_dir: None,
-        history: HashMap::new(),
-    };
-
-    fs.parse_cmds(buf.as_str());
-
+fn solve_part1(fs: FileSystem) -> u32 {
     fn is_the_dir(node: &Node) -> bool {
         if let NodeType::dir(size) = *node.nodeType.borrow() {
-            // dbg!(node);
             size <= 100000
         } else {
             false
         }
     }
-
-    // dbg!(&fs);
 
     let result = fs.root_dir.unwrap().filter_nodes(&is_the_dir);
     let total_size = result
@@ -465,7 +485,47 @@ fn main() {
             NodeType::dir(size) | NodeType::file(size) => acc + size,
         });
 
-    dbg!(result);
+    return total_size;
+}
 
-    println!("result: {}", total_size);
+fn solve_part2(fs: FileSystem) -> u32 {
+    const total_space: u32 = 70000000;
+    const unused_space_needed: u32 = 30000000;
+
+    // 28390426
+    let current_empty_space: u32 = total_space - (&fs).root_dir.clone().unwrap().total_size();
+    // 1609574
+
+    let is_the_dir = |node: &Node| -> bool {
+        match *node.nodeType.borrow() {
+            NodeType::dir(size) => (size + current_empty_space) >= unused_space_needed,
+            NodeType::file(_) => false,
+        }
+    };
+
+    let mut result = fs.root_dir.unwrap().filter_nodes(&is_the_dir);
+
+    let unwrap_size = |node: &Node| match *node.nodeType.borrow() {
+        NodeType::dir(size) | NodeType::file(size) => size,
+    };
+
+    let smallest_node = result.iter().min_by(|a, b| {
+        return unwrap_size(&a).cmp(&unwrap_size(&b));
+    });
+
+    return unwrap_size(smallest_node.unwrap());
+}
+
+fn main() {
+    let buf = fs::read_to_string("/Users/Iqbal.alasqalani/Dev/aoc-2022/day7/input.txt")
+        .expect("can't read file");
+
+    let mut filesystem_node = FileSystem {
+        root_dir: None,
+        current_dir: None,
+    };
+
+    filesystem_node.parse_cmds(buf.as_str());
+
+    println!("result: {}", solve_part2(filesystem_node));
 }
