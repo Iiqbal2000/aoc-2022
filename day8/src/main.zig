@@ -29,9 +29,96 @@ pub fn main() !void {
 
     const rows: usize = list.items[0].items.len;
 
-    var count = part1(list, rows, cols);
+    // var result = part1(list, rows, cols);
+    var result = part2(list, rows, cols);
 
-    std.debug.print("result: {}\n", .{count});
+    std.debug.print("result: {}\n", .{result});
+}
+
+fn part2(list: ArrayList(ArrayList(u8)), rows: usize, cols: usize) usize {
+    var highest_scenic_score: usize = 0;
+
+    for (1..rows - 1) |rows_i| {
+        for (1..cols - 1) |cols_i| {
+            var current_tree = list.items[rows_i].items[cols_i];
+            var up_visible_count: usize = 0;
+            var down_visible_count: usize = 0;
+            var left_visible_count: usize = 0;
+            var right_visible_count: usize = 0;
+
+            // upwards
+            var up: i8 = @as(i8, @intCast(rows_i)) - 1;
+            while (up >= 0) {
+                if (current_tree > list.items[@as(usize, @intCast(up))].items[cols_i]) {
+                    up_visible_count += 1;
+                } else if (current_tree == list.items[@as(usize, @intCast(up))].items[cols_i]) {
+                    up_visible_count += 1;
+                    break;
+                } else {
+                    up_visible_count += 1;
+                    break;
+                }
+
+                up -= 1;
+            }
+
+            // downwards
+            var down = rows_i + 1;
+            while (down < rows) : (down += 1) {
+                if (current_tree > list.items[down].items[cols_i]) {
+                    down_visible_count += 1;
+                } else if (current_tree == list.items[down].items[cols_i]) {
+                    down_visible_count += 1;
+                    break;
+                } else {
+                    down_visible_count += 1;
+                    break;
+                }
+            }
+
+            // leftwards
+            var left = @as(i8, @intCast(cols_i)) - 1;
+            while (left >= 0) {
+                if (current_tree > list.items[rows_i].items[@as(usize, @intCast(left))]) {
+                    left_visible_count += 1;
+                } else if (current_tree == list.items[rows_i].items[@as(usize, @intCast(left))]) {
+                    left_visible_count += 1;
+                    break;
+                } else {
+                    left_visible_count += 1;
+                    break;
+                }
+
+                left -= 1;
+            }
+
+            // rightwards
+            var right = cols_i + 1;
+            while (right < cols) {
+                if (current_tree > list.items[rows_i].items[right]) {
+                    right_visible_count += 1;
+                } else if (current_tree == list.items[rows_i].items[right]) {
+                    right_visible_count += 1;
+                    break;
+                } else {
+                    right_visible_count += 1;
+                    break;
+                }
+
+                right += 1;
+            }
+
+            var current_score = up_visible_count * down_visible_count * left_visible_count * right_visible_count;
+            if (current_score > highest_scenic_score) {
+                highest_scenic_score = current_score;
+            }
+
+            std.debug.print("\nscore: {d}\tindex:{d} {d}\n", .{ current_score, rows_i, cols_i });
+            std.debug.print("up: {d}\tdown: {d}\tleft: {d}\tright: {d}\n", .{ up_visible_count, down_visible_count, left_visible_count, right_visible_count });
+        }
+    }
+
+    return highest_scenic_score;
 }
 
 fn part1(list: ArrayList(ArrayList(u8)), rows: usize, cols: usize) usize {
@@ -106,7 +193,7 @@ fn part1(list: ArrayList(ArrayList(u8)), rows: usize, cols: usize) usize {
 
 test "test digits" {
     var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
+    defer list.deinit();
 
     const input = "45142";
     for (input) |c| {
