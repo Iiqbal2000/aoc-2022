@@ -30,103 +30,103 @@
 
 #define MAX_LINE_LENGTH 20
 #define MAX_OPCODE_LENGTH 10
-#define CYCLE_20TH 20
-#define CYCLE_60TH 60
-#define CYCLE_100TH 100
-#define CYCLE_140TH 140
-#define CYCLE_180TH 180
-#define CYCLE_220TH 220
+#define CYCLES_OF_INTEREST {20, 60, 100, 140, 180, 220}
 #define CRT_W 40
 #define CRT_H 6
+#define ACTIVE_PIXEL_LENGTH 3
 
-void update_signal_strength(int *signal_strength, int cycle, int CPU) {
-    if (cycle == CYCLE_20TH || cycle == CYCLE_60TH || cycle == CYCLE_100TH ||
-        cycle == CYCLE_140TH || cycle == CYCLE_180TH || cycle == CYCLE_220TH) {
-        *signal_strength += cycle * CPU;
-    }
-}
+typedef struct {
+    int x_regs;
+    int cycle;
+    char opcode[MAX_OPCODE_LENGTH];
+    int operand;
+} CPU;
 
-void execute_addx(int *CPU, int *cycle, int operand, int *signal_strength) {
-    const int cycle_n = 2;
-    for (int cycle_i = 0; cycle_i < cycle_n; cycle_i++) {
-        (*cycle)++;
-        update_signal_strength(signal_strength, *cycle, *CPU);
-        if (cycle_i == 1) {
-            *CPU += operand;
+typedef struct {
+    int screen[CRT_H][CRT_W];
+    int current_h_pos;
+    int current_w_pos;
+    int sprite[CRT_W];
+    int active_pixel_pos[ACTIVE_PIXEL_LENGTH];
+} CRT;
+
+void update_signal_strength(int *signal_strength, CPU *cpu) {
+    int cycles[] = CYCLES_OF_INTEREST;
+    for (int i = 0; i < sizeof(cycles)/sizeof(cycles[0]); i++) {
+        if (cpu->cycle == cycles[i]) {
+            *signal_strength += cpu->cycle * cpu->x_regs;
+            break;
         }
     }
 }
 
-void execute_noop(int *cycle, int *signal_strength, int CPU) {
-    const int cycle_n = 1;
-    for (int cycle_i = 0; cycle_i < cycle_n; cycle_i++) {
-        (*cycle)++;
-        update_signal_strength(signal_strength, *cycle, CPU);
+void inc_cycle(CPU *cpu, int *signal_strength) {
+    cpu->cycle += 1;
+    update_signal_strength(signal_strength, cpu);
+}
+
+void update_sprite_pixel(CRT *crt, CPU *cpu) {
+    memset(crt->sprite, 0, CRT_W * sizeof(int));
+    int active_pixel_pos[] = {cpu->x_regs - 1, cpu->x_regs, cpu->x_regs + 1};
+
+    for (int i = 0; i < ACTIVE_PIXEL_LENGTH; i++) {
+        int current_pos = active_pixel_pos[i]; 
+        if (current_pos >= 0 && current_pos < CRT_W) {
+            crt->sprite[current_pos] = 1;
+            active_pixel_pos[i] = current_pos;
+        }
+    }
+
+    memcpy(crt->active_pixel_pos, active_pixel_pos, sizeof(active_pixel_pos));
+}
+
+void update_crt_screen(CRT *crt) {
+    if (crt->active_pixel_pos[0] == crt->current_w_pos || crt->active_pixel_pos[1] == crt->current_w_pos || crt->active_pixel_pos[2] == crt->current_w_pos) {
+        crt->screen[crt->current_h_pos][crt->current_w_pos] = 1;
+    }
+
+    crt->current_w_pos += 1;
+    if (crt->current_w_pos == CRT_W) {
+        crt->current_h_pos += 1;
+        crt->current_w_pos = 0;
     }
 }
 
 void print_sprite(int sprite[CRT_W]) {
-    // printf("sprite: ");
     for (int i = 0; i < CRT_W; i++) {
-        if (sprite[i] == 1) {
-            printf("#");
-        } else {
-            printf(".");
-        }
+        printf("%c", sprite[i] ? '#' : '.');
     }
     printf("\n");
 }
 
-void print_crt_screen(int crt_screen[CRT_H][CRT_W]) {
-    // printf("CRT screen:\n");
+void print_crt_screen(CRT *crt) {
+     printf("CRT screen:\n");
     for (int row = 0; row < CRT_H; row++) {
-        for (int col = 0; col < CRT_W; col++) {
-            if (crt_screen[row][col] == 1) {
-                printf("#");
-            } else {
-                printf(".");
-            }   
-        }
-        printf("\n");
+        print_sprite(crt->screen[row]);
     }
     printf("\n\n");
 }
 
-
 int main() {
-    int CPU = 1;
-    char line[MAX_LINE_LENGTH];
-    char opcode[MAX_OPCODE_LENGTH];
-    int operand;
-    int cycle = 0;
+    CPU cpu = {
+        .x_regs = 1,
+        .cycle = 0,
+        .opcode = {'\0'},
+        .operand = 0,
+    };
+
+    CRT crt = {
+        .screen = {0},
+        .current_h_pos = 0,
+        .current_w_pos = 0,
+        .active_pixel_pos = {0},
+        .sprite = {0},
+    };
+
     int signal_strength = 0;
-    int sprite[CRT_W] = {0};
-    int sprite_i[3];
-    int crt_screen[CRT_H][CRT_W] = {0};
+    char line[MAX_LINE_LENGTH];
 
-    int crt_h_i = 0;
-    int crt_w_i = 0;
-
-    int left_pixel_pos = CPU - 1;
-    int center_pixel_pos = CPU;
-    int right_pixel_pos = CPU + 1;
-    if ((left_pixel_pos >= 0 && left_pixel_pos < CRT_W)) {
-        sprite[left_pixel_pos] = 1;
-    } 
-    if ((center_pixel_pos >= 0 && center_pixel_pos < CRT_W)) {
-        sprite[center_pixel_pos] = 1;
-    } 
-    if ((right_pixel_pos >= 0 && right_pixel_pos < CRT_W)) {
-        sprite[right_pixel_pos] = 1;
-    }
-
-    sprite_i[0] = left_pixel_pos;
-    sprite_i[1] = center_pixel_pos;
-    sprite_i[2] = right_pixel_pos;
-
-    if (sprite_i[0] == crt_w_i || sprite_i[1] == crt_w_i || sprite_i[2] == crt_w_i) {
-        crt_screen[crt_h_i][crt_w_i] = 1;
-    }
+    update_sprite_pixel(&crt, &cpu);
 
     FILE *fp = fopen("./input.txt", "r");
     if (fp == NULL) {
@@ -134,114 +134,59 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    while(fgets(line, 20, fp) != NULL) {
-        if (sscanf(line, "%s", opcode) != 1) {
+    while(fgets(line, MAX_LINE_LENGTH, fp) != NULL) {   
+        if (sscanf(line, "%s", cpu.opcode) != 1) {
             fprintf(stderr, "Error parsing line: %s\n", line);
             continue;
         }
 
-        if (strcmp(opcode, "addx") == 0) {
-            sscanf(line, "%s %d", opcode, &operand);
-            // print_sprite(sprite);
-            // execute_addx(&CPU, &cycle, operand, &signal_strength);
-            printf("Start cycle  %d: begin executing %s %d\n", cycle+1, opcode, operand);
-            const int cycle_n = 2;
-            for (int cycle_i = 0; cycle_i < cycle_n; cycle_i++) {
-                cycle++;
-                printf("During cycle %d: CRT draws pixel in position %d\n", cycle, crt_w_i);
+        if (strcmp(cpu.opcode, "addx") == 0) {
+            sscanf(line, "%s %d", cpu.opcode, &cpu.operand);
+            printf("Start cycle %d: begin executing %s %d\n", cpu.cycle + 1, cpu.opcode, cpu.operand);
+
+            for (int cycle_i = 0; cycle_i < 2; cycle_i++) {
+                inc_cycle(&cpu, &signal_strength);
                 
-                if (sprite_i[0] == crt_w_i || sprite_i[1] == crt_w_i || sprite_i[2] == crt_w_i) {
-                    crt_screen[crt_h_i][crt_w_i] = 1;
-                }
+                printf("During cycle %d: CRT draws pixel in position %d\n", cpu.cycle, crt.current_w_pos);
+
+                update_crt_screen(&crt);
+
                 printf("Current CRT row: ");
-                print_sprite(crt_screen[crt_h_i]);
+                print_sprite(crt.screen[crt.current_h_pos]);
 
-                crt_w_i += 1;
-                if (crt_w_i == CRT_W) {
-                    crt_h_i += 1;
-                    crt_w_i = 0;
-                }
-
-                update_signal_strength(&signal_strength, cycle, CPU);
                 if (cycle_i == 1) {
-                    CPU += operand;
+                    cpu.x_regs += cpu.operand;
+                    update_sprite_pixel(&crt, &cpu);
                 }
             }
+
+            printf("Finish executing %s %d (Register X is now %d)\n", cpu.opcode, cpu.operand, cpu.x_regs);
+            printf("Sprite row: ");
+            print_sprite(crt.sprite);
+        } else if (strcmp(cpu.opcode, "noop") == 0) {
+            printf("Start cycle %d: begin executing %s\n", cpu.cycle + 1, cpu.opcode);
+
+            inc_cycle(&cpu, &signal_strength);
             
-            int local_sprite[CRT_W] = {0};
-            int left_pixel_pos = CPU - 1;
-            int center_pixel_pos = CPU;
-            int right_pixel_pos = CPU + 1;
-            if ((left_pixel_pos >= 0 && left_pixel_pos < CRT_W)) {
-                local_sprite[left_pixel_pos] = 1;
-            } 
-            if ((center_pixel_pos >= 0 && center_pixel_pos < CRT_W)) {
-                local_sprite[center_pixel_pos] = 1;
-            } 
-            if ((right_pixel_pos >= 0 && right_pixel_pos < CRT_W)) {
-                local_sprite[right_pixel_pos] = 1;
-            }
+            printf("During cycle %d: CRT draws pixel in position %d\n", cpu.cycle, crt.current_w_pos);
 
-            sprite_i[0] = left_pixel_pos;
-            sprite_i[1] = center_pixel_pos;
-            sprite_i[2] = right_pixel_pos;
+            update_crt_screen(&crt);
 
-            memcpy(sprite, local_sprite, sizeof sprite);
-            printf("Finish executing %s %d (Register X is now %d)\n", opcode, operand, CPU);
+            printf("Current CRT row: ");
+            print_sprite(crt.screen[crt.current_h_pos]);
+
+            printf("Finish executing %s\n", cpu.opcode);
             printf("Sprite row: ");
-            print_sprite(sprite);
-        } else if (strcmp(opcode, "noop") == 0) {
-            // print_sprite(sprite);
-            // execute_noop(&cycle, &signal_strength, CPU);
-            printf("Start cycle  %d: begin executing %s\n", cycle+1, opcode);
-
-            const int cycle_n = 1;
-            for (int cycle_i = 0; cycle_i < cycle_n; cycle_i++) {
-                cycle++;
-                printf("During cycle %d: CRT draws pixel in position %d\n", cycle, crt_w_i);
-
-                if (sprite_i[0] == crt_w_i || sprite_i[1] == crt_w_i || sprite_i[2] == crt_w_i) {
-                    crt_screen[crt_h_i][crt_w_i] = 1;
-                }
-                printf("Current CRT row: ");
-                print_sprite(crt_screen[crt_h_i]);
-                crt_w_i += 1;
-                if (crt_w_i == CRT_W) {
-                    crt_h_i += 1;
-                    crt_w_i = 0;
-                }
-                update_signal_strength(&signal_strength, cycle, CPU);
-            }
-
-            int local_sprite[CRT_W] = {0};
-            int left_pixel_pos = CPU - 1;
-            int center_pixel_pos = CPU;
-            int right_pixel_pos = CPU + 1;
-            if ((left_pixel_pos >= 0 && left_pixel_pos < CRT_W)) {
-                local_sprite[left_pixel_pos] = 1;
-            } 
-            if ((center_pixel_pos >= 0 && center_pixel_pos < CRT_W)) {
-                local_sprite[center_pixel_pos] = 1;
-            } 
-            if ((right_pixel_pos >= 0 && right_pixel_pos < CRT_W)) {
-                local_sprite[right_pixel_pos] = 1;
-            }
-
-            sprite_i[0] = left_pixel_pos;
-            sprite_i[1] = center_pixel_pos;
-            sprite_i[2] = right_pixel_pos;
-
-            memcpy(sprite, local_sprite, sizeof sprite);
-            printf("Finish executing %s\n", opcode);
-            printf("Sprite row: ");
-            print_sprite(sprite);
+            print_sprite(crt.sprite);
         } else {
-            fprintf(stderr, "Invalid instruction: %s\n", opcode);
+            fprintf(stderr, "Invalid instruction: %s\n", cpu.opcode);
         }
-    
-        print_crt_screen(crt_screen);
+
+        // PART 2
+        print_crt_screen(&crt);
     }
 
+    // PART 1
     printf("Signal strength: %d\n", signal_strength);
 
     fclose(fp);
